@@ -1,5 +1,6 @@
 /*
    ########## touchコマンドのオプションは以下: ###########
+   ### touch.exeはWindows専用のコマンドです。ファイルを作成したりします。 ###
 
    -h  touchの説明とオプションを表示
 
@@ -45,18 +46,34 @@
 #define reference 'r'
 
 
-// mvToTrashのステータス
-enum fileop_Status {
+// copy_referenceのステータス
+enum copy_reference_Status {
     succes,
-    malloc_err,
-    can_not_trash,
-    terminate,
+    get_handle_err,
+    get_ref_filetime_err,
+    set_filetime_err,
+};
+
+// datetime_to_FILEMTIMEとのステータス
+enum datetime_to_FILEMTIME_Status {
+    malloc_err = 1,
+    get_timezone_info_err,
+    conv_file_to_sys_time_err,
+
+};
+
+// datetime_to_FILEMTIMEとのステータス
+enum do_touch_Status {
+    get_systemtime_err = 1,
+    get_filetime_err,
+    conv_sys_to_file_time_err,
+
 };
 
 bool date_equal(SYSTEMTIME *lpstTime, SYSTEMTIME *stFileTime);
 HANDLE get_handle(char *path, bool opt_no_create, bool is_folder);
 uint8_t copy_reference(HANDLE hFile, char *ref_path);
-uint8_t copy_spc_date(HANDLE hFile, FILETIME lpFileTime);
+bool copy_spc_date(HANDLE hFile, FILETIME lpFileTime);
 uint8_t do_touch(HANDLE hFile);
 uint8_t datetime_to_FILEMTIME(char *spc_date, FILETIME *lpFileTime);
 
@@ -119,7 +136,9 @@ touch.exe [ファイル]\n\nオプション:\n\n   \
 
     //オプション以外の引数の処理
     uint8_t i;
+    uint8_t subroutine_result;
     for (i = optind; i < argc; i++) {
+        uint8_t result = EXIT_FAILURE;
         // ファイルハンドルの取得
         HANDLE hFile = get_handle(argv[i], opt_no_create, false);
         // 本当はファイルの存在確認まじでやったほうが良い
@@ -131,31 +150,66 @@ touch.exe [ファイル]\n\nオプション:\n\n   \
             return EXIT_FAILURE;
         }
 
-        // rオプションが指定されたら
-        if (opt_reference == true) {
-            // case 0-3
-            copy_reference(hFile, ref_path);
-            return EXIT_SUCCESS;
-        }
 
-        // dオプションが指定されたら
-        if (opt_specify_date == true) {
+        if (opt_reference == true) {  // rオプションが指定されたら
+            switch (subroutine_result = copy_reference(hFile, ref_path)) {
+                case get_handle_err:
+                    puts("参照先のファイルが存在しないかもしれません");
+                    break;
+                case get_ref_filetime_err:
+                    puts("参照先ファイルのタイムスタンプが取得できません");
+                    break;
+                case set_filetime_err:
+                    puts("タイムスタンプを更新できません");
+                    break;
+                case succes:
+                    result = EXIT_SUCCESS;
+                    break;
+            }
+        } else if (opt_specify_date == true) {  // dオプションが指定されたら
             FILETIME lpFileTime = {0};
-            if (datetime_to_FILEMTIME(spc_date, &lpFileTime) != 0) {
-                puts("指定の日付の変換に失敗しました");
-                return EXIT_FAILURE;
+            switch (subroutine_result = datetime_to_FILEMTIME(spc_date, &lpFileTime)) {
+                case malloc_err:
+                    puts("メモリの確保に失敗しました");
+                    break;
+                case get_timezone_info_err:
+                    puts("タイムゾーン情報の取得に失敗しました");
+                    break;
+                case conv_file_to_sys_time_err:
+                    puts("指定の日付の変換に失敗しました");
+                    break;
+                case succes:
+                    if (copy_spc_date(hFile, lpFileTime) == true) {
+                        result = EXIT_SUCCESS;
+                    }
+                    break;
             }
-            if (copy_spc_date(hFile, lpFileTime) == 0) {
-                return EXIT_SUCCESS;
-            } else {
-                return EXIT_FAILURE;
+        } else {  // オプション無しの処理
+            switch (subroutine_result = do_touch(hFile)) {
+                case get_systemtime_err:
+                    puts("システム時刻の取得に失敗しました");
+                    break;
+                case get_filetime_err:
+                    puts("ファイル時刻の取得に失敗しました");
+                    break;
+                case conv_sys_to_file_time_err:
+                    puts("時刻の変換に失敗しました");
+                    break;
+                case succes:
+                    result = EXIT_SUCCESS;
+                    break;
             }
         }
 
-        do_touch(hFile);
+        // それぞれの関数の処理でreturnすると明示的にclose出来ないのでここでする
+        CloseHandle(hFile);
+        // 引数のファイルの処理が失敗したら後続の引数を無視してreturn
+        if (result == EXIT_FAILURE) {
+            return result;
+        }
     }
 
-
+    // すべての引数に対して処理が成功したら成功コードを返す
     return EXIT_SUCCESS;
 }
 
@@ -217,29 +271,29 @@ uint8_t copy_reference(HANDLE hFile, char *ref_path) {
     } else {
         is_folder = false;
     }
-    ref_hFile = get_handle(ref_path, false, is_folder);
+    ref_hFile = get_handle(ref_path, true, is_folder);
 
 
     // ハンドル取得失敗
     if (ref_hFile == INVALID_HANDLE_VALUE) {
-        return 1;
+        return get_handle_err;
     }
 
     // ref_path のタイムスタンプ(LastWriteTime)を取得
     FILETIME ftFileTime;
-    if (GetFileTime(ref_hFile, NULL, NULL, &ftFileTime) == false) {
-        return 2;
+    bool can_get_ref_time = GetFileTime(ref_hFile, NULL, NULL, &ftFileTime);
+    CloseHandle(ref_hFile);
+    if (can_get_ref_time == false) {
+        return get_ref_filetime_err;
     }
 
     // hFile にスタンプ書き込み
     if (SetFileTime(hFile, NULL, NULL, &ftFileTime) == false) {
-        return 3;
+        return set_filetime_err;
     }
 
-    CloseHandle(hFile);
-    CloseHandle(ref_hFile);
 
-    return 0;
+    return succes;
 }
 
 /*
@@ -269,7 +323,7 @@ uint8_t datetime_to_FILEMTIME(char *spc_date, FILETIME *lpFileTime) {
     assert(result != NULL);
     assert(result_size > 0);
 
-    size_t s_len = strlen(spc_date);
+    size_t s_len = strlen(cp_spc_date);
     size_t start = 0;
     size_t end   = 0;
     size_t i     = 0;
@@ -280,10 +334,10 @@ uint8_t datetime_to_FILEMTIME(char *spc_date, FILETIME *lpFileTime) {
         size_t tmp;
         size_t pos;
         uint8_t l = 0;
-        pos       = strcspn(&spc_date[start], *separator);
+        pos       = strcspn(&cp_spc_date[start], *separator);
         // 区切り文字が複数
         for (l = 1; l <= 2; l++) {
-            tmp = strcspn(&spc_date[start], *(separator + l));
+            tmp = strcspn(&cp_spc_date[start], *(separator + l));
             if (tmp < pos) {
                 pos = tmp;
             }
@@ -291,11 +345,11 @@ uint8_t datetime_to_FILEMTIME(char *spc_date, FILETIME *lpFileTime) {
         end = start + pos;
 
         // 区切り文字をヌル文字で上書き
-        spc_date[end] = '\0';
+        cp_spc_date[end] = '\0';
 
         // 分割後の文字列の先頭アドレスを result へ格納
         assert(i < result_size);
-        result[i] = &spc_date[start];
+        result[i] = &cp_spc_date[start];
         ++i;
 
         // 次に調べる位置を設定
@@ -318,13 +372,13 @@ uint8_t datetime_to_FILEMTIME(char *spc_date, FILETIME *lpFileTime) {
     // timezone infoの取得
     TIME_ZONE_INFORMATION TimeZoneInfo;
     if (GetTimeZoneInformation(&TimeZoneInfo) == TIME_ZONE_ID_INVALID) {
-        return 1;
+        return get_timezone_info_err;
     }
 
     // ローカルタイムをUTCに変換
     SYSTEMTIME GmtTime = {0};
     if (TzSpecificLocalTimeToSystemTime(&TimeZoneInfo, &SysTime, &GmtTime) == 0) {
-        printf("touch: `%s': 無効な日付の書式です\n", cp_spc_date);
+        printf("touch: `%s': 無効な日付の書式です\n", spc_date);
         free(cp_spc_date);
         exit(1);
     }
@@ -332,22 +386,22 @@ uint8_t datetime_to_FILEMTIME(char *spc_date, FILETIME *lpFileTime) {
 
 
     if (SystemTimeToFileTime(&GmtTime, lpFileTime) == false) {
-        return 1;
+        return conv_file_to_sys_time_err;
     }
 
-    return 0;
+    return succes;
 }
 
 /*
  * dオプション専用の関数
  * datetime_to_FILEMTIME() で取得したFILETIMEを hFILEに書き込む
  */
-uint8_t copy_spc_date(HANDLE hFile, FILETIME lpFileTime) {
+bool copy_spc_date(HANDLE hFile, FILETIME lpFileTime) {
     if (SetFileTime(hFile, NULL, &lpFileTime, &lpFileTime) == false) {
-        return 1;
+        return false;
     }
     CloseHandle(hFile);
-    return 0;
+    return true;
 }
 
 
@@ -369,7 +423,7 @@ uint8_t do_touch(HANDLE hFile) {
     FILETIME ftTime;
     GetSystemTime(&lpstTime);
     if (SystemTimeToFileTime(&lpstTime, &ftTime) == false) {
-        return 1;
+        return get_systemtime_err;
     }
 
 
@@ -377,23 +431,21 @@ uint8_t do_touch(HANDLE hFile) {
     FILETIME ftFileTime;
     SYSTEMTIME stFileTime;
     if (GetFileTime(hFile, NULL, NULL, &ftFileTime) == false) {
-        return 2;
+        return get_filetime_err;
     }
 
     if (FileTimeToSystemTime(&ftFileTime, &stFileTime) == false) {
-        return 3;
+        return conv_sys_to_file_time_err;
     }
 
     // 分まで現在時刻と等しいなら
     if (date_equal(&lpstTime, &stFileTime) == true) {
         // 何もしない
-        return 0;
+        return succes;
     } else {
         // タイムスタンプの更新
         SetFileTime(hFile, NULL, &ftTime, &ftTime);
     }
 
-    CloseHandle(hFile);
-
-    return 0;
+    return succes;
 }
