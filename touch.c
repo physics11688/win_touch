@@ -86,7 +86,7 @@ touch.exe [ファイル]\n\nオプション:\n\n   \
 -c  ファイルを新規作成しない\n\n   -d　タイムスタンプの指定  \n        ex: touch -d \"2021-11-9 9:21\" file\n\n   \
 -r  他のファイルのスタンプに合わせる\n        ex: touch -r ref_file file\n\n";
     int8_t opt;
-    opterr = 0;  //　getopt()のエラーメッセージを無効にする。
+    opterr = 0;  // 　getopt()のエラーメッセージを無効にする。
 
     // オプションのフラグ
     bool opt_no_create, opt_specify_date, opt_reference;
@@ -134,7 +134,7 @@ touch.exe [ファイル]\n\nオプション:\n\n   \
     }
 
 
-    //オプション以外の引数の処理
+    // オプション以外の引数の処理
     uint8_t i;
     uint8_t subroutine_result;
     for (i = optind; i < argc; i++) {
@@ -229,15 +229,15 @@ HANDLE get_handle(char *path, bool opt_no_create, bool is_folder) {
     HANDLE hTemplate            テンプレートファイル
     */
 
-    PCTSTR pszFileName = path;                          // UNICODE が定義されてるはずなので PCWSTR。
-    DWORD dwAccess     = GENERIC_READ | GENERIC_WRITE;  //データの読み書きとファイルポインタの移動.
-    DWORD dwShare      = FILE_SHARE_READ | FILE_SHARE_WRITE;  //オープンを許可.
-    PSECURITY_ATTRIBUTES psa = NULL;                          // デフォルトのセキュリティ記述子.
-    DWORD dwCreatDisposition;                                 // 動作指定
+    PCTSTR pszFileName = path;                      // UNICODE が定義されてるはずなので PCWSTR。
+    DWORD dwAccess = GENERIC_READ | GENERIC_WRITE;  // データの読み書きとファイルポインタの移動.
+    DWORD dwShare  = FILE_SHARE_READ | FILE_SHARE_WRITE;  // オープンを許可.
+    PSECURITY_ATTRIBUTES psa = NULL;                      // デフォルトのセキュリティ記述子.
+    DWORD dwCreatDisposition;                             // 動作指定
     if (opt_no_create) {
         dwCreatDisposition = OPEN_EXISTING;  // no_createが付いてるときは存在してたら開く
     } else {
-        dwCreatDisposition = OPEN_ALWAYS;  //ファイルオープン。ファイルが存在していない場合は新規作成する
+        dwCreatDisposition = OPEN_ALWAYS;  // ファイルオープン。ファイルが存在していない場合は新規作成する
     }
 
     DWORD dwFlagsAndAttributes;
