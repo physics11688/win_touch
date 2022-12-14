@@ -6,8 +6,7 @@ WSLがあると言っても,まあ一応ってことです.
 
 でも本当は `<windows.h>` を使ってみるために昔遊びで書いただけです.
 
-lias rm "$HOME\local\bin\trash.exe"
-```
+
 
 <br>
 
