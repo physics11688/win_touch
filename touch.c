@@ -10,17 +10,6 @@
 
    -r 他のファイルと同じタイムスタンプにする
 
-   ########## ビルドと使用方法 #############define
-
-   1. このソースをダウンロード
-   2. ターミナルでフォルダを作る        : mkdir -p $HOME\local\bin
-   3. ターミナルでビルド               : gcc -std=c11 -Wall -Wextra -fexec-charset=cp932 touch.c -o
-   $HOME\local\bin\touch.exe
-   4. プロファイルがあるか確認          :Test-Path $profile
-   5. 4.がFalseなら(Trueなら6に進む) →  :New-Item -path $profile -type file -force
-   6. エイリアスの設定                  : echo 'Set-Alias touch "$HOME\local\bin\touch.exe"' >> $profile
-   7. プロファイルの再読み込み          : . $profile
-   8. touch -h とかしてみる
 */
 
 #define NDEBUG
@@ -229,11 +218,11 @@ HANDLE get_handle(char *path, bool opt_no_create, bool is_folder) {
     HANDLE hTemplate            テンプレートファイル
     */
 
-    PCTSTR pszFileName = path;                      // UNICODE が定義されてるはずなので PCWSTR。
-    DWORD dwAccess = GENERIC_READ | GENERIC_WRITE;  // データの読み書きとファイルポインタの移動.
-    DWORD dwShare  = FILE_SHARE_READ | FILE_SHARE_WRITE;  // オープンを許可.
-    PSECURITY_ATTRIBUTES psa = NULL;                      // デフォルトのセキュリティ記述子.
-    DWORD dwCreatDisposition;                             // 動作指定
+    PCTSTR pszFileName = path;                          // UNICODE が定義されてるはずなので PCWSTR。
+    DWORD dwAccess     = GENERIC_READ | GENERIC_WRITE;  // データの読み書きとファイルポインタの移動.
+    DWORD dwShare      = FILE_SHARE_READ | FILE_SHARE_WRITE;  // オープンを許可.
+    PSECURITY_ATTRIBUTES psa = NULL;                          // デフォルトのセキュリティ記述子.
+    DWORD dwCreatDisposition;                                 // 動作指定
     if (opt_no_create) {
         dwCreatDisposition = OPEN_EXISTING;  // no_createが付いてるときは存在してたら開く
     } else {
